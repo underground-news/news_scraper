@@ -4,43 +4,66 @@ from gnews import GNews
 import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI()
-
-google_news = GNews()
-google_news.max_results = 50  # number of responses across a keyword
-google_news.country = "United Kingdom"  # News from a specific country
-google_news.language = "english"  # News in a specific language
-google_news.start_date = (2022, 2, 13)  # Search from 1st Jan 2020
-google_news.end_date = (2022, 2, 15)  # Search until 1st March 2020
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class QueryParams(BaseModel):
     max_results: int = 50
-    country: str | None = None
-    language: str | None = None
-    start_date: tuple[int, int, int] | None = None
-    end_date: tuple[int, int, int] | None = None
+    country: str = None
+    language: str = None
+    start_date: tuple[int, int, int] = None
+    end_date: tuple[int, int, int] = None
 
 
-@app.get("/search_results/{query}}")
+@app.get("/search_results/")
 def get_news(
     query: str | None = None,
-    max_results: int = 50,
+    max_results: int = 10,
     country: str | None = None,
-    language: str | None = None,
-    start_date: tuple[int, int, int] | None = None,
-    end_date: tuple[int, int, int] | None = None,
+    language: str | None = "english",
+    start_date: str | None = None,
+    end_date: str | None = None,
 ):
+    """
+    Searches for news articles based on a query, and returns the top 10 results by defaults.
+
+    Args:
+        query (str | None, optional): Search Query for News. Defaults to None.
+        max_results (int, optional): Maximum number of results to show. Defaults to 10.
+        country (str | None, optional): Country domain for news channel. Defaults to None.
+        language (str | None, optional): Language for search results. Defaults to english.
+        start_date (str | None, optional): Date of the format YYYY-MM-DD. Defaults to None.
+        end_date (str | None, optional): Date of the format YYYY-MM-DD. Defaults to None.
+
+    Returns:
+        _type_: _description_
+    """
+    if start_date is not None:
+        start_date = tuple(map(int, start_date.split("-")))
+    if end_date is not None:
+        end_date = tuple(map(int, end_date.split("-")))
     new_rss_feed = GNews(
         max_results=max_results,
         country=country,
         language=language,
-        start_date=start_date,
-        end_date=end_date,
     )
-
-    return new_rss_feed.get_news(query)
+    if start_date is not None:
+        new_rss_feed.start_date = start_date
+    if end_date is not None:
+        new_rss_feed.end_date = end_date
+    results = new_rss_feed.get_news(query)
+    results = [get_article(result["url"]) for result in results]
+    return results
 
 
 @app.get("/read_article/{url:path}")
@@ -64,4 +87,4 @@ def get_article(url: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run("news_api:app", host="localhost", port=8000, reload=True)
+    uvicorn.run("main:app", host="localhost", port=8000, reload=True)
